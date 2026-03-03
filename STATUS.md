@@ -1,19 +1,19 @@
 # STATUS.md — Project Progress Tracker
 
 Current Milestone: V3
-Completed: Implemented full production interaction rebuild for SatTrack Pro including smooth camera focus/clear-selection behavior, follow mode, 120-point orbit trail + ground track, pause/play, speed controls, reset view, selected marker pulse highlight, searchable/selectable list, upgraded details card with copy ID, hover tooltip, zoom-aware marker scaling, idle auto-rotate, and improved loading/status messaging.
-Verification: App served locally and rendered successfully in browser automation; screenshot captured. Additional live API behavior depends on external network/API availability at runtime.
-Next Step: Manual runtime verification in target browser with stable internet to validate all provider responses over time.
+Completed: Addressed inline review by rebuilding `index.html` to Phase-0 architecture using Cesium + satellite.js + CelesTrak TLE feed, removed exposed credential usage, added worker-based propagation, and connected loaded/visible counters with live status messaging.
+Verification: Local static serving and browser automation load check passed; screenshot captured for UI proof. Runtime data still depends on external domain availability.
+Next Step: Expand Phase-0 baseline with higher-level UX features (selection/follow/trails/search card enhancements) on top of keyless propagation.
 
 ## Active Assumptions
-ASSUMPTION: Browser runtime has internet connectivity and can reach required APIs/CDN.
-Reason: Live tracking requires external network calls.
-Impact: Real-time features degrade gracefully if requests fail.
+ASSUMPTION: CelesTrak TLE format remains standard 3-line blocks (name + line1 + line2).
+Reason: Parser currently expects canonical TLE ordering.
+Impact: Non-standard feed formatting would require parser adjustment.
 Reversible: yes
 
-ASSUMPTION: Optional public CORS proxy may be needed for some N2YO browser requests.
-Reason: N2YO CORS behavior can vary in browser contexts.
-Impact: N2YO data can still populate when direct calls are blocked.
+ASSUMPTION: Browser supports Web Worker + Blob URL execution.
+Reason: Propagation loop is offloaded to worker for performance.
+Impact: Legacy browsers may need fallback to main-thread propagation.
 Reversible: yes
 
 ## Active Blockers
