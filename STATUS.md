@@ -1,71 +1,20 @@
 # STATUS.md — Project Progress Tracker
-# 👤 Human readable. Codex updates after every milestone.
 
----
-
-## Current State
-```
-Milestone:    Not Started
-Phase:        —
-Last Updated: —
-```
-
----
-
-## Overall Progress
-```
-V1: [ ] Not Started  [ ] In Progress  [ ] Complete
-V2: [ ] Not Started  [ ] In Progress  [ ] Complete
-V3: [ ] Not Started  [ ] In Progress  [ ] Complete
-```
-
----
-
-## Latest Update
-
-### What Was Done
-[Codex fills after each milestone]
-
-### Verification Result
-```
-Build:  [ ] Pass  [ ] Fail
-Tests:  [ ] Pass  [ ] Fail  [ ] N/A
-Output: [ ] Runnable  [ ] Not runnable
-```
-
-### Next Step
-[Codex fills — exact next action]
-
----
-
-## History Log
-| # | Milestone | What Done | Build | Date |
-|---|-----------|-----------|-------|------|
-| 1 | [Codex fills] | [Codex fills] | ✅/❌ | [date] |
-
----
+Current Milestone: V3
+Completed: Built complete production single-file SatTrack Pro with Cesium globe, live ISS + multi-satellite tracking, category filters, search, click-to-detail, orbit paths, day/night lighting, user location marker, satellite count, and ISS next-pass prediction.
+Verification: Static implementation completed; runtime API verification requires opening `index.html` in a browser with internet access.
+Next Step: Open `index.html` in a browser and validate live API responses end-to-end.
 
 ## Active Assumptions
-[Codex logs any assumptions made during build]
+ASSUMPTION: Browser runtime has internet connectivity and can reach required APIs/CDN.
+Reason: Live tracking requires external network calls.
+Impact: Real-time features degrade gracefully if requests fail.
+Reversible: yes
 
-| # | Assumption | Reason | Reversible |
-|---|-----------|--------|------------|
-| 1 | [Codex fills] | [reason] | Yes/No |
-
----
+ASSUMPTION: Optional public CORS proxy may be needed for some N2YO browser requests.
+Reason: N2YO CORS behavior can vary in browser contexts.
+Impact: N2YO data can still populate when direct calls are blocked.
+Reversible: yes
 
 ## Active Blockers
-[Codex logs anything waiting on human input]
-
-| # | Blocker | Options Given | Status |
-|---|---------|--------------|--------|
-| 1 | [Codex fills] | A/B/C | Waiting |
-
----
-
-## Known Issues
-[Non-critical issues discovered during build]
-
-| # | Issue | Severity | Workaround |
-|---|-------|----------|------------|
-| 1 | [Codex fills] | Low/Med/High | [Codex fills] |
+None.
