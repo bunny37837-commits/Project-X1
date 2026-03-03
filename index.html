@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SatTrack Pro — Production Rebuild</title>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Widgets/widgets.css" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #071224;
+      --panel: rgba(7, 18, 36, 0.85);
+      --muted: #8ea1bd;
+      --text: #e8f0ff;
+      --accent: #4da3ff;
+      --ok: #38d39f;
+      --warn: #ffbd4a;
+      --danger: #ff6a80;
+      --line: rgba(255, 255, 255, 0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body, #app, #globe { margin: 0; width: 100%; height: 100%; background: var(--bg); color: var(--text); font-family: Inter, Segoe UI, Roboto, Arial, sans-serif; }
+    #app { position: relative; overflow: hidden; }
+    #globe { position: absolute; inset: 0; }
+    #tooltip {
+      position: absolute; z-index: 15; pointer-events: none; padding: 6px 8px; border-radius: 8px; font-size: 12px;
+      color: white; border: 1px solid var(--line); background: rgba(0,0,0,.75); display: none;
+    }
+    .panel {
+      position: absolute; top: 14px; left: 14px; width: min(410px, calc(100vw - 28px)); max-height: calc(100vh - 28px);
+      display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px;
+      background: var(--panel); backdrop-filter: blur(8px);
+      border: 1px solid var(--line); z-index: 10; overflow: auto;
+    }
+    .header { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
+    .title { font-size: 18px; font-weight: 700; }
+    .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .badge { font-size: 11px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    .btnrow { display:flex; gap: 8px; flex-wrap: wrap; }
+    button, input, select {
+      border: 1px solid var(--line); outline: none; border-radius: 10px;
+      background: rgba(255,255,255,0.03); color: var(--text); padding: 8px 10px;
+    }
+    button { cursor: pointer; }
+    button.active { border-color: var(--accent); background: rgba(77,163,255,.2); }
+    input, select { width:100%; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip { padding: 7px 10px; border-radius: 999px; font-size: 12px; }
+    .stats { display:grid; grid-template-columns: repeat(2, 1fr); gap:8px; }
+    .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.02); }
+    .k { font-size: 11px; color: var(--muted); }
+    .v { font-size: 15px; margin-top: 4px; font-weight: 600; }
+    .status { font-size: 12px; border-radius: 8px; padding: 8px; border:1px solid var(--line); }
+    .status.ok { color: var(--ok); }
+    .status.warn { color: var(--warn); }
+    .status.err { color: var(--danger); }
+    .listWrap { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .listHeader { position: sticky; top: 0; z-index: 2; padding: 8px 10px; font-size: 12px; background: rgba(9,18,34,.95); color: var(--muted); border-bottom: 1px solid var(--line); }
+    .list { max-height: 220px; overflow: auto; }
+    .item { padding: 9px 10px; border-bottom: 1px solid var(--line); cursor:pointer; font-size: 13px; }
+    .item:hover { background: rgba(255,255,255,.04); }
+    .item:last-child { border-bottom: none; }
+    .small { font-size: 12px; color: var(--muted); }
+    .detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="globe"></div>
+    <div id="tooltip"></div>
+
+    <aside class="panel">
+      <div class="header">
+        <div>
+          <div class="title">SatTrack Pro</div>
+          <div class="sub">3D Live Satellite Tracking Platform</div>
+        </div>
+        <div id="refreshTime" class="badge">Loading…</div>
+      </div>
+
+      <div id="simTime" class="badge">Sim Time: -- | Speed: ×1 | Playing</div>
+
+      <div class="row">
+        <input id="searchInput" type="text" placeholder="Search satellites" />
+        <select id="sortSelect" aria-label="Sort satellites">
+          <option value="name">Sort: Name</option>
+          <option value="alt">Sort: Alt</option>
+          <option value="speed">Sort: Speed</option>
+        </select>
+      </div>
+
+      <div class="chips" id="categoryChips"></div>
+
+      <div class="btnrow">
+        <button id="pauseBtn">Pause</button>
+        <button class="speedBtn active" data-speed="1">×1</button>
+        <button class="speedBtn" data-speed="2">×2</button>
+        <button class="speedBtn" data-speed="5">×5</button>
+        <button class="speedBtn" data-speed="10">×10</button>
+        <button id="resetViewBtn">Reset View</button>
+      </div>
+
+      <div class="stats">
+        <div class="card"><div class="k">Visible satellites</div><div id="satCount" class="v">0</div></div>
+        <div class="card"><div class="k">ISS next pass</div><div id="nextPass" class="v">—</div></div>
+      </div>
+
+      <div id="status" class="status warn">Loading feeds…</div>
+
+      <div class="card">
+        <div class="k">Selected satellite details</div>
+        <div class="btnrow" style="margin-top:8px;">
+          <button id="followBtn">Follow: OFF</button>
+          <button id="copyIdBtn">Copy ID</button>
+        </div>
+        <div class="detailGrid">
+          <div class="small">Name/ID<div id="dName" class="v mono" style="font-size:12px;">—</div></div>
+          <div class="small">Category<div id="dCategory" class="v" style="font-size:12px;">—</div></div>
+          <div class="small">Altitude<div id="dAlt" class="v" style="font-size:12px;">—</div></div>
+          <div class="small">Speed<div id="dSpeed" class="v" style="font-size:12px;">—</div></div>
+          <div class="small">Lat<div id="dLat" class="v" style="font-size:12px;">—</div></div>
+          <div class="small">Lon<div id="dLon" class="v" style="font-size:12px;">—</div></div>
+        </div>
+      </div>
+
+      <div class="listWrap">
+        <div class="listHeader">Satellite list</div>
+        <div class="list" id="satList"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.118/Build/Cesium/Cesium.js"></script>
+  <script>
+    const N2YO_API_KEY = "HMFZHK-PEFK9C-D4XXG8-5O6N";
+    const CESIUM_ION_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI4YzM2MWNlOS1iOWE3LTRiMGEtYTVkYy1hZmFhYmQwNGFhZTQiLCJpZCI6Mzk2NTcwLCJpYXQiOjE3NzI0NDEzODJ9.6dJWQ2kBbeec8Yl8n9_rQ7FLmqv-QWgQgZqGrxV7PJY";
+
+    const CATEGORY_MAP = {
+      ISS: [{ id: 25544, name: "ISS (ZARYA)", category: "ISS" }],
+      Starlink: [44713, 44914, 44238, 44714].map((id, i) => ({ id, name: `STARLINK-${i + 1}`, category: "Starlink" })),
+      GPS: [24876, 26360, 26605, 32260].map((id, i) => ({ id, name: `GPS-${i + 1}`, category: "GPS" })),
+      Weather: [33591, 43013, 28654, 27424].map((id, i) => ({ id, name: `WEATHER-${i + 1}`, category: "Weather" }))
+    };
+
+    const state = {
+      viewer: null,
+      entities: new Map(),
+      trailEntities: new Map(),
+      groundTrackEntities: new Map(),
+      trail: new Map(),
+      satellites: [],
+      selectedId: null,
+      selectedCategory: "All",
+      search: "",
+      sortBy: "name",
+      followOn: false,
+      paused: false,
+      timeScale: 1,
+      userLoc: { lat: 28.6139, lon: 77.2090, alt: 0 },
+      lastOk: null,
+      cameraTargetPos: null,
+      cameraTargetLookAt: null,
+      defaultCamera: {
+        pos: Cesium.Cartesian3.fromDegrees(0, 15, 20000000),
+        lookAt: Cesium.Cartesian3.fromDegrees(0, 0, 0)
+      },
+      lastFrameTs: performance.now(),
+      simTime: new Date(),
+      idleMs: 0,
+      loadingCount: 0
+    };
+
+    const el = {
+      app: document.getElementById("app"),
+      tooltip: document.getElementById("tooltip"),
+      chips: document.getElementById("categoryChips"),
+      status: document.getElementById("status"),
+      list: document.getElementById("satList"),
+      satCount: document.getElementById("satCount"),
+      nextPass: document.getElementById("nextPass"),
+      refreshTime: document.getElementById("refreshTime"),
+      searchInput: document.getElementById("searchInput"),
+      sortSelect: document.getElementById("sortSelect"),
+      pauseBtn: document.getElementById("pauseBtn"),
+      resetViewBtn: document.getElementById("resetViewBtn"),
+      followBtn: document.getElementById("followBtn"),
+      copyIdBtn: document.getElementById("copyIdBtn"),
+      simTime: document.getElementById("simTime"),
+      dName: document.getElementById("dName"),
+      dCategory: document.getElementById("dCategory"),
+      dAlt: document.getElementById("dAlt"),
+      dSpeed: document.getElementById("dSpeed"),
+      dLat: document.getElementById("dLat"),
+      dLon: document.getElementById("dLon")
+    };
+
+    function setStatus(type, text) { el.status.className = `status ${type}`; el.status.textContent = text; }
+    function markInteraction() { state.idleMs = 0; }
+
+    async function fetchJSON(url, { timeout = 9000, proxyFallback = false } = {}) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const r = await fetch(url, { signal: controller.signal });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return await r.json();
+      } catch (err) {
+        if (!proxyFallback) throw err;
+        const proxied = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const r2 = await fetch(proxied, { signal: controller.signal });
+        if (!r2.ok) throw new Error(`Proxy HTTP ${r2.status}`);
+        return await r2.json();
+      } finally { clearTimeout(timer); }
+    }
+
+    function addAtmosphereAndStars(viewer) {
+      viewer.scene.globe.enableLighting = true;
+      viewer.scene.skyAtmosphere.show = true;
+      viewer.scene.sun.show = true;
+
+      viewer.entities.add({
+        id: "atmosphere-glow",
+        position: Cesium.Cartesian3.ZERO,
+        ellipsoid: {
+          radii: new Cesium.Cartesian3(6460000, 6460000, 6460000),
+          material: Cesium.Color.fromCssColorString("#4fa2ff").withAlpha(0.08),
+          outline: false
+        }
+      });
+
+      for (let i = 0; i < 350; i += 1) {
+        const lon = (Math.random() * 360) - 180;
+        const lat = (Math.random() * 180) - 90;
+        const h = 60000000 + Math.random() * 50000000;
+        viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, h),
+          point: { pixelSize: 1 + Math.random() * 2, color: Cesium.Color.WHITE.withAlpha(0.8) }
+        });
+      }
+    }
+
+    function initGlobe() {
+      Cesium.Ion.defaultAccessToken = CESIUM_ION_TOKEN;
+      const viewer = new Cesium.Viewer("globe", {
+        timeline: false,
+        animation: false,
+        geocoder: false,
+        baseLayerPicker: true,
+        sceneModePicker: false,
+        navigationHelpButton: false,
+        homeButton: true,
+        fullscreenButton: false,
+        infoBox: false,
+        selectionIndicator: false,
+        shouldAnimate: true
+      });
+      viewer.scene.globe.depthTestAgainstTerrain = false;
+      state.viewer = viewer;
+      addAtmosphereAndStars(viewer);
+
+      viewer.camera.setView({ destination: state.defaultCamera.pos });
+
+      const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+      handler.setInputAction((movement) => {
+        markInteraction();
+        const picked = viewer.scene.pick(movement.position);
+        if (!picked || !picked.id || !picked.id.id || !String(picked.id.id).startsWith("sat-")) {
+          clearSelection();
+          return;
+        }
+        selectSatelliteById(Number(String(picked.id.id).replace("sat-", "")), true);
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+      handler.setInputAction((movement) => {
+        const picked = viewer.scene.pick(movement.endPosition);
+        if (!picked || !picked.id || !picked.id.properties) {
+          el.tooltip.style.display = "none";
+          return;
+        }
+        const p = picked.id.properties;
+        el.tooltip.style.display = "block";
+        el.tooltip.style.left = `${movement.endPosition.x + 14}px`;
+        el.tooltip.style.top = `${movement.endPosition.y + 14}px`;
+        el.tooltip.textContent = `${p.name.getValue()} | ${Number(p.alt.getValue()).toFixed(1)} km`;
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+      handler.setInputAction(() => {
+        if (!state.selectedId) return;
+        selectSatelliteById(state.selectedId, true, true);
+      }, Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+
+      [Cesium.ScreenSpaceEventType.WHEEL, Cesium.ScreenSpaceEventType.PINCH_MOVE, Cesium.ScreenSpaceEventType.RIGHT_DOWN, Cesium.ScreenSpaceEventType.MIDDLE_DOWN]
+        .forEach((t) => handler.setInputAction(markInteraction, t));
+    }
+
+    function renderChips() {
+      const cats = ["All", ...Object.keys(CATEGORY_MAP)];
+      el.chips.innerHTML = "";
+      cats.forEach((cat) => {
+        const b = document.createElement("button");
+        b.className = `chip ${state.selectedCategory === cat ? "active" : ""}`;
+        b.textContent = cat;
+        b.onclick = () => { markInteraction(); state.selectedCategory = cat; renderChips(); drawAndList(); };
+        el.chips.appendChild(b);
+      });
+    }
+
+    function chosenSatellites() {
+      const base = Object.values(CATEGORY_MAP).flat();
+      return state.selectedCategory === "All" ? base : base.filter((s) => s.category === state.selectedCategory);
+    }
+
+    async function fetchISSOpenNotify() {
+      const data = await fetchJSON("https://api.allorigins.win/raw?url=http://api.open-notify.org/iss-now.json");
+      if (!data || !data.iss_position) throw new Error("Invalid ISS payload");
+      return { lat: Number(data.iss_position.latitude), lon: Number(data.iss_position.longitude) };
+    }
+
+    async function fetchN2YOSatPosition(sat) {
+      const { lat, lon, alt } = state.userLoc;
+      const url = `https://api.n2yo.com/rest/v1/satellite/positions/${sat.id}/${lat}/${lon}/${alt}/2/&apiKey=${N2YO_API_KEY}`;
+      const data = await fetchJSON(url, { proxyFallback: true });
+      const info = data.info || {};
+      const pos = (data.positions && data.positions[0]) || {};
+      return {
+        id: sat.id,
+        name: info.satname || sat.name,
+        category: sat.category,
+        lat: Number(pos.satlatitude ?? 0),
+        lon: Number(pos.satlongitude ?? 0),
+        alt: Number(pos.sataltitude ?? 0),
+        speed: Number(pos.satvelocity ?? 0),
+        timestamp: Number(pos.timestamp ?? Date.now() / 1000)
+      };
+    }
+
+    async function fetchISSPass() {
+      const { lat, lon, alt } = state.userLoc;
+      const url = `https://api.n2yo.com/rest/v1/satellite/radiopasses/25544/${lat}/${lon}/${alt}/2/40/&apiKey=${N2YO_API_KEY}`;
+      try {
+        const data = await fetchJSON(url, { proxyFallback: true });
+        const first = data.passes && data.passes[0];
+        if (!first) return "No pass data";
+        return new Date(first.startUTC * 1000).toUTCString().slice(17, 22);
+      } catch {
+        return "Unavailable";
+      }
+    }
+
+    function updateDetailsCard(sat) {
+      if (!sat) {
+        el.dName.textContent = "—";
+        el.dCategory.textContent = "—";
+        el.dAlt.textContent = "—";
+        el.dSpeed.textContent = "—";
+        el.dLat.textContent = "—";
+        el.dLon.textContent = "—";
+        return;
+      }
+      el.dName.textContent = `${sat.name} / ${sat.id}`;
+      el.dCategory.textContent = sat.category;
+      el.dAlt.textContent = `${sat.alt.toFixed(2)} km`;
+      el.dSpeed.textContent = `${sat.speed.toFixed(2)} km/h`;
+      el.dLat.textContent = sat.lat.toFixed(4);
+      el.dLon.textContent = sat.lon.toFixed(4);
+    }
+
+    function setCameraTargetFromSat(sat, closer = false) {
+      const lookAt = Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt * 1000);
+      const behind = Cesium.Cartesian3.normalize(lookAt, new Cesium.Cartesian3());
+      const distance = closer ? 500000 : 1200000;
+      const offset = Cesium.Cartesian3.multiplyByScalar(behind, distance, new Cesium.Cartesian3());
+      const targetPos = Cesium.Cartesian3.add(lookAt, offset, new Cesium.Cartesian3());
+      state.cameraTargetLookAt = lookAt;
+      state.cameraTargetPos = targetPos;
+    }
+
+    function clearSelection() {
+      state.selectedId = null;
+      state.followOn = false;
+      el.followBtn.textContent = "Follow: OFF";
+      updateDetailsCard(null);
+      if (state.viewer) state.viewer.selectedEntity = undefined;
+    }
+
+    function selectSatelliteById(id, focus = false, closer = false) {
+      const sat = state.satellites.find((s) => s.id === id);
+      if (!sat) return;
+      state.selectedId = id;
+      updateDetailsCard(sat);
+      const ent = state.entities.get(`sat-${id}`);
+      if (ent) state.viewer.selectedEntity = ent;
+      if (focus) setCameraTargetFromSat(sat, closer);
+    }
+
+    function updateTrailAndGroundTrack(sat, posCartesian) {
+      const id = sat.id;
+      const arr = state.trail.get(id) || [];
+      arr.push({ cart: Cesium.Cartesian3.clone(posCartesian), lat: sat.lat, lon: sat.lon });
+      if (arr.length > 120) arr.shift();
+      state.trail.set(id, arr);
+
+      const trailPositions = arr.map((p) => p.cart);
+      const groundPositions = arr.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 0));
+
+      const trailId = `trail-${id}`;
+      let trailEntity = state.trailEntities.get(trailId);
+      if (!trailEntity) {
+        trailEntity = state.viewer.entities.add({
+          id: trailId,
+          polyline: {
+            positions: trailPositions,
+            width: 2,
+            material: Cesium.Color.CYAN.withAlpha(0.45)
+          }
+        });
+        state.trailEntities.set(trailId, trailEntity);
+      } else {
+        trailEntity.polyline.positions = trailPositions;
+      }
+
+      const gtId = `ground-${id}`;
+      let gEntity = state.groundTrackEntities.get(gtId);
+      if (!gEntity) {
+        gEntity = state.viewer.entities.add({
+          id: gtId,
+          polyline: {
+            positions: groundPositions,
+            width: 1.3,
+            material: Cesium.Color.ORANGE.withAlpha(0.45),
+            clampToGround: false
+          }
+        });
+        state.groundTrackEntities.set(gtId, gEntity);
+      } else {
+        gEntity.polyline.positions = groundPositions;
+      }
+    }
+
+    function upsertEntity(sat) {
+      const id = `sat-${sat.id}`;
+      const pos = Cesium.Cartesian3.fromDegrees(sat.lon, sat.lat, sat.alt * 1000);
+      const colorByCategory = { ISS: Cesium.Color.YELLOW, Starlink: Cesium.Color.CYAN, GPS: Cesium.Color.LIME, Weather: Cesium.Color.ORANGE };
+      const color = colorByCategory[sat.category] || Cesium.Color.WHITE;
+
+      let e = state.entities.get(id);
+      if (!e) {
+        e = state.viewer.entities.add({
+          id,
+          position: pos,
+          point: { pixelSize: 8, color, outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+          label: { text: sat.name, font: "11px sans-serif", pixelOffset: new Cesium.Cartesian2(0, -14), showBackground: true, backgroundColor: Cesium.Color.BLACK.withAlpha(0.6) },
+          properties: { id: sat.id, name: sat.name, category: sat.category, lat: sat.lat, lon: sat.lon, alt: sat.alt, speed: sat.speed }
+        });
+        state.entities.set(id, e);
+      } else {
+        e.position = pos;
+        e.label.text = sat.name;
+        e.properties = new Cesium.PropertyBag({ id: sat.id, name: sat.name, category: sat.category, lat: sat.lat, lon: sat.lon, alt: sat.alt, speed: sat.speed });
+      }
+      updateTrailAndGroundTrack(sat, pos);
+    }
+
+    function drawAndList() {
+      const filtered = state.satellites
+        .filter((s) => state.selectedCategory === "All" || s.category === state.selectedCategory)
+        .filter((s) => s.name.toLowerCase().includes(state.search.toLowerCase()));
+
+      filtered.sort((a, b) => state.sortBy === "name" ? a.name.localeCompare(b.name) : (state.sortBy === "alt" ? b.alt - a.alt : b.speed - a.speed));
+      el.satCount.textContent = String(filtered.length);
+
+      state.entities.forEach((entity, id) => { entity.show = filtered.some((s) => `sat-${s.id}` === id); });
+      state.trailEntities.forEach((entity, id) => { entity.show = filtered.some((s) => id === `trail-${s.id}`); });
+      state.groundTrackEntities.forEach((entity, id) => { entity.show = filtered.some((s) => id === `ground-${s.id}`); });
+
+      el.list.innerHTML = "";
+      filtered.forEach((s) => {
+        upsertEntity(s);
+        const row = document.createElement("div");
+        row.className = "item";
+        row.textContent = `${s.name} • ${s.category} • ${s.alt.toFixed(1)} km`;
+        row.onclick = () => { markInteraction(); selectSatelliteById(s.id, true); };
+        el.list.appendChild(row);
+      });
+
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "item small";
+        empty.textContent = "No satellites match current filters/search.";
+        el.list.appendChild(empty);
+      }
+    }
+
+    async function locateUser() {
+      if (!navigator.geolocation) return;
+      return new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition((p) => {
+          state.userLoc.lat = p.coords.latitude;
+          state.userLoc.lon = p.coords.longitude;
+          state.userLoc.alt = Math.round((p.coords.altitude || 0) / 1000);
+          state.viewer.entities.add({
+            id: "user-location",
+            position: Cesium.Cartesian3.fromDegrees(state.userLoc.lon, state.userLoc.lat, 0),
+            point: { pixelSize: 10, color: Cesium.Color.fromCssColorString("#ff6a80") },
+            label: { text: "You", pixelOffset: new Cesium.Cartesian2(0, -14), fillColor: Cesium.Color.WHITE }
+          });
+          resolve();
+        }, () => resolve(), { enableHighAccuracy: true, timeout: 4500 });
+      });
+    }
+
+    async function refresh() {
+      const requested = chosenSatellites();
+      state.loadingCount = requested.length;
+      setStatus("warn", `Loading ${state.loadingCount} satellites…`);
+      try {
+        const [issNow, issPass, ...rest] = await Promise.all([
+          fetchISSOpenNotify().catch(() => null),
+          fetchISSPass(),
+          ...requested.map((s) => fetchN2YOSatPosition(s).catch(() => null))
+        ]);
+
+        let sats = rest.filter(Boolean);
+        if (issNow) {
+          const idx = sats.findIndex((s) => s.id === 25544);
+          const issFallback = { id: 25544, name: "ISS (ZARYA)", category: "ISS", lat: issNow.lat, lon: issNow.lon, alt: idx >= 0 ? sats[idx].alt : 420, speed: idx >= 0 ? sats[idx].speed : 27600 };
+          if (idx >= 0) sats[idx] = { ...sats[idx], lat: issNow.lat, lon: issNow.lon };
+          else sats.push(issFallback);
+        }
+
+        state.satellites = sats;
+        state.lastOk = new Date();
+        el.nextPass.textContent = issPass;
+        el.refreshTime.textContent = `Updated ${state.lastOk.toLocaleTimeString()}`;
+        drawAndList();
+
+        if (state.selectedId) {
+          const selected = state.satellites.find((s) => s.id === state.selectedId);
+          if (selected) updateDetailsCard(selected);
+        }
+
+        setStatus(sats.length ? "ok" : "warn", sats.length ? `Loaded ${sats.length} satellites.` : "Connected, but no records returned.");
+      } catch (err) {
+        setStatus("err", `Data refresh failed: ${err.message}`);
+      }
+    }
+
+    function animateCameraAndMarkers(dt) {
+      const v = state.viewer;
+      if (!v) return;
+
+      const selected = state.selectedId ? state.satellites.find((s) => s.id === state.selectedId) : null;
+      if (state.followOn && selected) setCameraTargetFromSat(selected);
+
+      if (state.cameraTargetPos && state.cameraTargetLookAt) {
+        const curr = v.camera.positionWC;
+        const nextPos = Cesium.Cartesian3.lerp(curr, state.cameraTargetPos, Math.min(1, dt * 2.4), new Cesium.Cartesian3());
+        const dir = Cesium.Cartesian3.normalize(Cesium.Cartesian3.subtract(state.cameraTargetLookAt, nextPos, new Cesium.Cartesian3()), new Cesium.Cartesian3());
+        v.camera.setView({ destination: nextPos, orientation: { direction: dir, up: Cesium.Cartesian3.UNIT_Z } });
+      } else if (state.idleMs > 10000 && !state.selectedId) {
+        v.camera.rotate(Cesium.Cartesian3.UNIT_Z, -0.05 * dt);
+      }
+
+      state.entities.forEach((entity, key) => {
+        if (!entity.point || !entity.position) return;
+        const p = entity.position.getValue(Cesium.JulianDate.now());
+        if (!p) return;
+
+        const dist = Cesium.Cartesian3.distance(v.camera.positionWC, p);
+        let baseSize = Math.max(4, Math.min(14, 18000000 / dist * 6));
+
+        const sid = Number(key.replace("sat-", ""));
+        if (state.selectedId === sid) {
+          const pulse = 3 + Math.sin(performance.now() * 0.008) * 2;
+          baseSize += pulse;
+          entity.point.outlineWidth = 2.8;
+          entity.point.color = Cesium.Color.WHITE;
+        }
+        entity.point.pixelSize = baseSize;
+
+        const occluded = v.scene.globe.ellipsoid.cartesianToCartographic(p);
+        entity.point.color = (state.selectedId === sid ? Cesium.Color.WHITE : entity.point.color);
+        if (occluded && dist > 8000000) entity.point.color = entity.point.color.withAlpha(0.6);
+      });
+    }
+
+    function tick(ts) {
+      const dtRaw = Math.max(0, (ts - state.lastFrameTs) / 1000);
+      state.lastFrameTs = ts;
+      const dt = state.paused ? 0 : dtRaw * state.timeScale;
+
+      if (!state.paused) state.simTime = new Date(state.simTime.getTime() + dt * 1000);
+      state.idleMs += dtRaw * 1000;
+      el.simTime.textContent = `Sim Time: ${state.simTime.toISOString().replace('T', ' ').slice(0, 19)} UTC | Speed: ×${state.timeScale} | ${state.paused ? "Paused" : "Playing"}`;
+
+      animateCameraAndMarkers(dtRaw);
+      requestAnimationFrame(tick);
+    }
+
+    async function boot() {
+      initGlobe();
+      renderChips();
+
+      el.searchInput.addEventListener("input", (e) => { markInteraction(); state.search = e.target.value.trim(); drawAndList(); });
+      el.sortSelect.addEventListener("change", (e) => { markInteraction(); state.sortBy = e.target.value; drawAndList(); });
+
+      el.pauseBtn.addEventListener("click", () => {
+        markInteraction();
+        state.paused = !state.paused;
+        el.pauseBtn.textContent = state.paused ? "Play" : "Pause";
+      });
+
+      document.querySelectorAll(".speedBtn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          markInteraction();
+          state.timeScale = Number(btn.dataset.speed);
+          document.querySelectorAll(".speedBtn").forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+        });
+      });
+
+      el.resetViewBtn.addEventListener("click", () => {
+        markInteraction();
+        state.cameraTargetPos = Cesium.Cartesian3.clone(state.defaultCamera.pos);
+        state.cameraTargetLookAt = Cesium.Cartesian3.clone(state.defaultCamera.lookAt);
+      });
+
+      el.followBtn.addEventListener("click", () => {
+        markInteraction();
+        if (!state.selectedId) return;
+        state.followOn = !state.followOn;
+        el.followBtn.textContent = `Follow: ${state.followOn ? "ON" : "OFF"}`;
+      });
+
+      el.copyIdBtn.addEventListener("click", async () => {
+        markInteraction();
+        if (!state.selectedId) return;
+        try {
+          await navigator.clipboard.writeText(String(state.selectedId));
+          setStatus("ok", `Copied satellite ID ${state.selectedId}`);
+        } catch {
+          setStatus("warn", "Could not copy ID in this browser context.");
+        }
+      });
+
+      await locateUser();
+      await refresh();
+      setInterval(() => { if (!state.paused) refresh(); }, 10000);
+      requestAnimationFrame(tick);
+    }
+
+    boot().catch((err) => setStatus("err", `Startup failed: ${err.message}`));
+  </script>
+</body>
+</html>

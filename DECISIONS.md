@@ -1,75 +1,56 @@
 # DECISIONS.md — Technical Decisions Log
-# ⚙️ Codex updates this. Every major decision must be recorded here with reasoning.
 
----
-
-## Decision Log Format
-Each entry must follow this format:
-
-```
-## [DEC-001] Decision Title
-Date: YYYY-MM-DD
-Status: Decided / Reconsidered / Superseded
-
-Decision: [What was decided]
-Reason:   [Why this choice]
-Rejected: [What was NOT chosen and why]
-Impact:   [What this affects]
-```
-
----
-
-## [DEC-001] Architecture Pattern
-Date: [Codex fills]
+## [DEC-001] Single-file web architecture
+Date: 2026-03-03
 Status: Decided
 
-Decision: [e.g., MVVM with Repository pattern]
-Reason:   [Codex fills]
-Rejected: [Codex fills]
-Impact:   [Codex fills]
+Decision: Implement SatTrack Pro as one production-grade `index.html` containing HTML/CSS/JS.
+Reason: SPEC explicitly requires no build step and single-file delivery.
+Rejected: Multi-file bundler architecture (Webpack/Vite) due to explicit constraint mismatch.
+Impact: All UI, logic, and integration code lives in one portable artifact.
 
----
-
-## [DEC-002] Database / Storage
-Date: [Codex fills]
+## [DEC-002] Rendering engine
+Date: 2026-03-03
 Status: Decided
 
-Decision: [e.g., Room / SQLite / Firebase]
-Reason:   [Codex fills]
-Rejected: [Codex fills]
-Impact:   [Codex fills]
+Decision: Use CesiumJS from CDN for globe, entities, orbit lines, lighting, and camera navigation.
+Reason: SPEC mandates real 3D Earth with CesiumJS and day/night rendering.
+Rejected: Three.js + custom globe because it increases complexity and diverges from SPEC.
+Impact: CDN dependency on Cesium assets and Cesium Ion token configuration.
 
----
-
-## [DEC-003] Key Libraries / Dependencies
-Date: [Codex fills]
+## [DEC-003] Data providers and update cadence
+Date: 2026-03-03
 Status: Decided
 
-Decision: [Codex fills]
-Reason:   [Codex fills]
-Impact:   [Codex fills]
+Decision: Use Open Notify for ISS live position and N2YO for categorized multi-satellite data, refreshing every 10 seconds.
+Reason: Matches feature requirements and API key availability in SPEC.
+Rejected: Static/mock satellite data except as temporary UI fallback when providers fail.
+Impact: Requires resilient async fetching, stale-state handling, and user-visible status indicators.
 
----
-
-## [DEC-004] Network Access
-Date: [Codex fills]
-Status: [Decided / Not Required]
-
-Decision: [Network OFF / ON with reason]
-Allowed Domains: [if enabled]
-Reason:   [Codex fills]
-
----
-
-## [DEC-005] Security Approach
-Date: [Codex fills]
+## [DEC-004] Network policy
+Date: 2026-03-03
 Status: Decided
 
-Decision: [Codex fills]
-Reason:   [Codex fills]
-Impact:   [Codex fills]
+Decision: Network ON for runtime API and asset calls.
+Allowed Domains: `api.n2yo.com`, `cesium.com`, `opennotify.org` (plus optional runtime CORS proxy fallback when direct calls fail).
+Reason: Live satellite tracking and Cesium terrain assets require external requests.
+Rejected: Fully offline mode because it cannot satisfy live-data goals.
+Impact: App includes timeout/error guards and avoids sensitive credential logging.
 
----
+## [DEC-005] Security posture
+Date: 2026-03-03
+Status: Decided
 
-## Future Decisions
-[Codex adds new entries here as project progresses]
+Decision: Keep API tokens in client code as supplied by SPEC, avoid token logging, sanitize rendered text with `textContent`, and avoid dynamic HTML injection.
+Reason: Browser-only app requires client-side tokens; safe DOM updates reduce XSS risk.
+Rejected: Server-side key proxy (not allowed by single-file/no-backend scope).
+Impact: Keys are visible in source by design; UI remains defensive against untrusted API payloads.
+
+## [DEC-006] Interaction model for production controls
+Date: 2026-03-03
+Status: Decided
+
+Decision: Implement frame-based control loop for smooth camera focus, follow mode, orbit/ground trails, pause/play, and speed scaling in the same single-file app.
+Reason: Inline review requested high-fidelity interactive behavior (selection focus, simulation controls, and richer visuals) that requires per-frame state updates rather than only periodic fetch updates.
+Rejected: Instant camera jumps and fetch-only updates; these feel abrupt and do not support follow/simulation UX.
+Impact: Added requestAnimationFrame loop and state machine for camera targets, selection, and playback controls.
