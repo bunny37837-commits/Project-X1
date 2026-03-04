@@ -4,44 +4,53 @@
 Date: 2026-03-03
 Status: Decided
 
-Decision: Implement SatTrack as one production `index.html` containing HTML/CSS/JS.
-Reason: SPEC requires no build step and single-file delivery.
-Rejected: Multi-file bundler architecture (Webpack/Vite) due to explicit constraint mismatch.
-Impact: All UI, logic, and integration code lives in one portable artifact.
+Decision: Keep the full monitoring platform in one production `index.html` file.
+Reason: SPEC requires a no-build, browser-openable artifact.
+Rejected: Bundled multi-file architecture.
+Impact: UI, worker logic, and integration all remain in one deployable file.
 
-## [DEC-002] Rendering engine
+## [DEC-002] Rendering engine and visual layer
 Date: 2026-03-03
 Status: Decided
 
-Decision: Use CesiumJS from CDN for globe rendering and entity updates.
-Reason: SPEC mandates real 3D Earth with CesiumJS.
-Rejected: Three.js + custom globe because it diverges from SPEC.
-Impact: Runtime depends on Cesium CDN assets.
+Decision: Use CesiumJS globe with lighting enabled, optional OSM buildings, and entity overlays for satellites/aircraft/places.
+Reason: Required 3D Earth and professional monitoring visuals.
+Rejected: Replacing Cesium with custom 3D stack.
+Impact: High-fidelity rendering with optional degradation if buildings are unavailable.
 
-## [DEC-003] Live data source migration (Phase-0)
+## [DEC-003] Live sources strategy
 Date: 2026-03-03
 Status: Decided
 
-Decision: Replace key-based N2YO/Open Notify aggregation with CelesTrak bulk TLE ingestion plus local propagation using `satellite.js` in a Web Worker.
-Reason: Inline feedback required removal of exposed keys and a deterministic, keyless live propagation path.
-Rejected: Continuing with browser-exposed API key calls.
-Impact: No API keys stored in source; positions are propagated client-side at ~1Hz message cadence.
+Decision: Primary satellite source is CelesTrak TLE with local worker propagation; optional air traffic overlay uses OpenSky feed; reverse geocoding uses Nominatim for selected objects.
+Reason: Delivers multi-source live monitoring without embedded secrets.
+Rejected: Returning to client-exposed key-based APIs.
+Impact: Keyless runtime, broader situational context (orbital + atmospheric traffic + location context).
 
 ## [DEC-004] Network policy
 Date: 2026-03-03
 Status: Decided
 
-Decision: Network ON for runtime feed/assets with explicit domains.
-Allowed Domains: `celestrak.org`, `cesium.com`, `cdnjs.cloudflare.com`.
-Reason: TLE feed + Cesium + satellite.js are required for live experience.
-Rejected: Offline mode because it cannot satisfy live-data requirements.
-Impact: App surfaces runtime fetch failures in UI status panel.
+Decision: Network ON for runtime feeds and assets.
+Allowed Domains: `celestrak.org`, `cesium.com`, `cdnjs.cloudflare.com`, `opensky-network.org`, `api.allorigins.win`, `nominatim.openstreetmap.org`.
+Reason: Required for live telemetry, CDN assets, optional CORS fallback, and place resolution.
+Rejected: Offline-only mode.
+Impact: Some optional panels degrade gracefully when external feeds are blocked.
 
 ## [DEC-005] Security posture
 Date: 2026-03-03
 Status: Decided
 
-Decision: Do not embed API keys or tokens; sanitize user-visible updates using `textContent`; avoid dynamic HTML injection.
-Reason: Browser-only apps are source-visible; removing credentials reduces exposure.
-Rejected: Client-side credential storage.
-Impact: Security risk reduced; all external content treated as untrusted input.
+Decision: No API keys/tokens embedded; all remote payloads treated as untrusted and rendered via `textContent` or controlled labels.
+Reason: Browser source is visible by design and must avoid credential exposure.
+Rejected: Storing credentials in frontend code.
+Impact: Safer client distribution and reduced leak risk.
+
+## [DEC-006] Monitoring UX architecture
+Date: 2026-03-03
+Status: Decided
+
+Decision: Provide operator-focused controls: source switching, orbit filters, search, selection details, trail toggles, air-overlay toggles, my-location pinning, and clear-place actions.
+Reason: User requested professional-grade monitoring with richer controls and location context.
+Rejected: Minimal phase-0 panel with only loaded/visible counters.
+Impact: Improved operational usability and discoverability of tracked assets.

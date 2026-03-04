@@ -1,10 +1,9 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <!-- Phase-0: live propagation via satellite.js + CelesTrak -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Project-X1</title>
+  <title>SatTrack Pro Monitoring Suite</title>
 
   <!-- CesiumJS (existing in your project) -->
   <script src="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js"></script>
@@ -16,185 +15,546 @@
   <!-- Tailwind (existing) -->
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-slate-950 text-slate-100 m-0">
+<body class="m-0 bg-slate-950 text-slate-100 overflow-hidden">
   <div id="cesiumContainer" class="fixed inset-0"></div>
 
-  <aside class="fixed z-20 top-4 left-4 w-[360px] max-w-[calc(100vw-2rem)] rounded-xl border border-slate-700/70 bg-slate-900/80 backdrop-blur p-4 space-y-3">
-    <h1 class="text-lg font-semibold">SatTrack Pro</h1>
-    <p class="text-xs text-slate-400">Phase-0 live propagation (CelesTrak + satellite.js)</p>
-    <div class="grid grid-cols-2 gap-2 text-sm">
-      <div class="rounded border border-slate-700 p-2">Loaded <span data-sat-count>0</span></div>
-      <div class="rounded border border-slate-700 p-2">Visible <span data-visible-count>0</span></div>
+  <aside class="fixed z-20 top-3 left-3 w-[410px] max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-1.5rem)] overflow-auto rounded-xl border border-slate-700/70 bg-slate-900/85 backdrop-blur p-3 space-y-3">
+    <div>
+      <h1 class="text-lg font-semibold">SatTrack Pro</h1>
+      <p class="text-xs text-slate-400">Professional orbital + air activity monitor</p>
     </div>
-    <div id="status" class="text-xs text-slate-300 rounded border border-slate-700 p-2">Initializing…</div>
+
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <div class="border border-slate-700 rounded p-2">Satellites loaded: <span data-sat-count>0</span></div>
+      <div class="border border-slate-700 rounded p-2">Visible: <span data-visible-count>0</span></div>
+      <div class="border border-slate-700 rounded p-2">Air traffic: <span data-air-count>0</span></div>
+      <div class="border border-slate-700 rounded p-2">Selected: <span data-selected>None</span></div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2">
+      <label class="text-xs">Satellite Source
+        <select id="sourceSelect" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm">
+          <option value="active">Active (All)</option>
+          <option value="starlink">Starlink</option>
+          <option value="gps-ops">GPS Ops</option>
+          <option value="weather">Weather</option>
+          <option value="stations">Stations (ISS etc.)</option>
+        </select>
+      </label>
+      <label class="text-xs">Orbit Filter
+        <select id="orbitFilter" class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm">
+          <option value="all">All Orbits</option>
+          <option value="leo">LEO (&lt; 2000 km)</option>
+          <option value="meo">MEO (2000-35786 km)</option>
+          <option value="geo">GEO (&gt;= 35786 km)</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2">
+      <button id="reloadBtn" class="rounded bg-blue-600 hover:bg-blue-500 text-xs px-2 py-2">Reload Source</button>
+      <button id="myLocBtn" class="rounded bg-indigo-600 hover:bg-indigo-500 text-xs px-2 py-2">My Location</button>
+      <button id="clearMarkersBtn" class="rounded bg-rose-700 hover:bg-rose-600 text-xs px-2 py-2">Clear Places</button>
+    </div>
+
+    <div class="grid grid-cols-3 gap-2">
+      <button id="airBtn" class="rounded border border-slate-600 text-xs px-2 py-2">Air: ON</button>
+      <button id="trailBtn" class="rounded border border-slate-600 text-xs px-2 py-2">Trails: ON</button>
+      <button id="bldBtn" class="rounded border border-slate-600 text-xs px-2 py-2">Buildings: OFF</button>
+    </div>
+
+    <label class="text-xs block">Search satellites
+      <input id="searchInput" type="text" placeholder="ISS, STARLINK, GPS..." class="mt-1 w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm" />
+    </label>
+
+    <div id="status" class="text-xs border border-slate-700 rounded p-2 text-slate-300">Initializing…</div>
+
+    <div class="border border-slate-700 rounded p-2 text-xs space-y-1">
+      <div class="font-semibold text-slate-200">Selected details</div>
+      <div>Name: <span id="selName" class="text-slate-300">—</span></div>
+      <div>Lat/Lon: <span id="selLatLon" class="text-slate-300">—</span></div>
+      <div>Altitude: <span id="selAlt" class="text-slate-300">—</span></div>
+      <div>Nearest place: <span id="selPlace" class="text-slate-300">—</span></div>
+    </div>
+
+    <div class="border border-slate-700 rounded overflow-hidden">
+      <div class="text-xs bg-slate-800 px-2 py-1">Satellite monitor list</div>
+      <div id="satList" class="max-h-52 overflow-auto text-xs"></div>
+    </div>
   </aside>
 
-  <script>
-    /**********************************************************************
-     * Phase-0: remove exposed keys, use non-Ion defaults
-     **********************************************************************/
-    // Cesium.Ion.defaultAccessToken intentionally unset.
+  <div id="tooltip" class="fixed z-30 hidden text-xs px-2 py-1 bg-black/80 border border-slate-600 rounded pointer-events-none"></div>
 
-    /**********************************************************************
-     * Cesium init
-     **********************************************************************/
-    const viewer = window.viewer || new Cesium.Viewer("cesiumContainer", {
-      animation: false,
+  <script>
+    const state = {
+      source: "active",
+      orbitFilter: "all",
+      search: "",
+      selectedId: null,
+      includeAir: true,
+      showTrails: true,
+      showBuildings: false,
+      satMap: new Map(),
+      trailMap: new Map(),
+      satEntities: new Map(),
+      trailEntities: new Map(),
+      airEntities: new Map(),
+      placePins: [],
+      maxRendered: 500,
+      workerReady: false,
+      osmTileset: null
+    };
+
+    const viewer = new Cesium.Viewer("cesiumContainer", {
       timeline: true,
+      animation: false,
       baseLayerPicker: false,
       geocoder: false,
-      homeButton: false,
+      homeButton: true,
       sceneModePicker: false,
       navigationHelpButton: false,
       fullscreenButton: false,
       infoBox: false,
-      selectionIndicator: true
+      selectionIndicator: true,
+      shouldAnimate: true
     });
-    window.viewer = viewer;
-    viewer.clock.shouldAnimate = true;
-    viewer.clock.multiplier = 1;
+    viewer.scene.globe.enableLighting = true;
+    viewer.scene.skyAtmosphere.show = true;
+    viewer.scene.sun.show = true;
 
-    const statusEl = document.getElementById("status");
-    const CELESTRAK_GROUP = "active";
-    const CELESTRAK_TLE_URL = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(CELESTRAK_GROUP)}&FORMAT=tle`;
-    const MAX_RENDERED = 800;
+    const els = {
+      status: document.getElementById("status"),
+      satCount: document.querySelector("[data-sat-count]"),
+      visibleCount: document.querySelector("[data-visible-count]"),
+      airCount: document.querySelector("[data-air-count]"),
+      selectedText: document.querySelector("[data-selected]"),
+      sourceSelect: document.getElementById("sourceSelect"),
+      orbitFilter: document.getElementById("orbitFilter"),
+      reloadBtn: document.getElementById("reloadBtn"),
+      myLocBtn: document.getElementById("myLocBtn"),
+      clearMarkersBtn: document.getElementById("clearMarkersBtn"),
+      airBtn: document.getElementById("airBtn"),
+      trailBtn: document.getElementById("trailBtn"),
+      bldBtn: document.getElementById("bldBtn"),
+      searchInput: document.getElementById("searchInput"),
+      satList: document.getElementById("satList"),
+      tooltip: document.getElementById("tooltip"),
+      selName: document.getElementById("selName"),
+      selLatLon: document.getElementById("selLatLon"),
+      selAlt: document.getElementById("selAlt"),
+      selPlace: document.getElementById("selPlace")
+    };
+
+    function setStatus(text, type = "normal") {
+      els.status.textContent = text;
+      els.status.className = "text-xs border rounded p-2 " + (type === "error"
+        ? "border-red-500 text-red-200 bg-red-900/30"
+        : type === "ok"
+          ? "border-emerald-500 text-emerald-200 bg-emerald-900/20"
+          : "border-slate-700 text-slate-300");
+    }
 
     function parseTLE(text) {
-      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-      const out = [];
+      const lines = text.split(/\r?\n/).map((v) => v.trim()).filter(Boolean);
+      const parsed = [];
       for (let i = 0; i < lines.length; i += 1) {
-        const maybeName = lines[i];
-        const l1 = lines[i + 1];
-        const l2 = lines[i + 2];
-        if (!l1 || !l2) break;
-        if (l1.startsWith("1 ") && l2.startsWith("2 ")) {
-          out.push({ name: maybeName, line1: l1, line2: l2 });
+        if (lines[i + 1]?.startsWith("1 ") && lines[i + 2]?.startsWith("2 ")) {
+          parsed.push({ name: lines[i], line1: lines[i + 1], line2: lines[i + 2], id: String(parsed.length) });
           i += 2;
         }
       }
-      return out;
+      return parsed;
+    }
+
+    function orbitClass(altKm) {
+      if (altKm < 2000) return "leo";
+      if (altKm >= 35786) return "geo";
+      return "meo";
+    }
+
+    function matchSat(s) {
+      if (state.orbitFilter !== "all" && s.orbit !== state.orbitFilter) return false;
+      if (state.search && !s.name.toLowerCase().includes(state.search)) return false;
+      return true;
+    }
+
+    function updateList() {
+      const items = Array.from(state.satMap.values()).filter(matchSat).slice(0, 300);
+      els.satList.innerHTML = "";
+      if (!items.length) {
+        const row = document.createElement("div");
+        row.className = "px-2 py-2 text-slate-400";
+        row.textContent = "No satellites match current filter";
+        els.satList.appendChild(row);
+        return;
+      }
+
+      for (const sat of items) {
+        const row = document.createElement("button");
+        row.className = "w-full text-left px-2 py-2 border-b border-slate-800 hover:bg-slate-800/70";
+        row.textContent = `${sat.name} · ${sat.altKm.toFixed(1)} km · ${sat.orbit.toUpperCase()}`;
+        row.onclick = () => selectSatellite(sat.id, true);
+        els.satList.appendChild(row);
+      }
+    }
+
+    function updateSelectionCard(sat) {
+      if (!sat) {
+        els.selectedText.textContent = "None";
+        els.selName.textContent = "—";
+        els.selLatLon.textContent = "—";
+        els.selAlt.textContent = "—";
+        els.selPlace.textContent = "—";
+        return;
+      }
+      els.selectedText.textContent = sat.name;
+      els.selName.textContent = sat.name;
+      els.selLatLon.textContent = `${sat.latDeg.toFixed(3)}, ${sat.lonDeg.toFixed(3)}`;
+      els.selAlt.textContent = `${sat.altKm.toFixed(2)} km (${sat.orbit.toUpperCase()})`;
+    }
+
+    async function reversePlaceName(lat, lon) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+        const res = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!res.ok) return "Unavailable";
+        const data = await res.json();
+        return data.display_name || "Unnamed place";
+      } catch {
+        return "Unavailable";
+      }
+    }
+
+    async function selectSatellite(id, fly = false) {
+      const sat = state.satMap.get(id);
+      if (!sat) return;
+      state.selectedId = id;
+      updateSelectionCard(sat);
+      const entity = state.satEntities.get(id);
+      if (entity) viewer.selectedEntity = entity;
+      if (fly && sat.position) {
+        viewer.camera.flyTo({ destination: sat.position, duration: 1.2 });
+      }
+      els.selPlace.textContent = "Resolving…";
+      els.selPlace.textContent = await reversePlaceName(sat.latDeg, sat.lonDeg);
+    }
+
+    function applyVisibilityFilters() {
+      let visible = 0;
+      for (const sat of state.satMap.values()) {
+        const show = matchSat(sat);
+        const entity = state.satEntities.get(sat.id);
+        const trailEntity = state.trailEntities.get(sat.id);
+        if (entity) entity.show = show;
+        if (trailEntity) trailEntity.show = show && state.showTrails;
+        if (show) visible += 1;
+      }
+      els.visibleCount.textContent = String(visible);
+      updateList();
     }
 
     const workerCode = `
       self.importScripts("https://cdnjs.cloudflare.com/ajax/libs/satellite.js/1.3.0/satellite.min.js");
-
       let sats = [];
       let lastSent = 0;
 
       self.onmessage = (e) => {
         const msg = e.data;
-        if (msg.type === "LOAD_TLES") {
-          sats = msg.payload.map((s, idx) => {
-            const satrec = satellite.twoline2satrec(s.line1, s.line2);
-            return { id: s.id ?? String(idx), name: s.name ?? ("SAT-" + idx), satrec };
-          });
+        if (msg.type === "LOAD") {
+          sats = msg.payload.map((s, idx) => ({
+            id: s.id ?? String(idx),
+            name: s.name ?? "SAT-" + idx,
+            satrec: satellite.twoline2satrec(s.line1, s.line2)
+          }));
           self.postMessage({ type: "READY", count: sats.length });
           return;
         }
 
         if (msg.type === "TICK") {
           const nowMs = msg.nowMs;
-          const date = new Date(nowMs);
-
-          if (msg.minIntervalMs && (nowMs - lastSent) < msg.minIntervalMs) return;
+          if (msg.minIntervalMs && nowMs - lastSent < msg.minIntervalMs) return;
           lastSent = nowMs;
-
-          const out = [];
+          const date = new Date(nowMs);
+          const gmst = satellite.gstime(date);
+          const positions = [];
           for (let i = 0; i < sats.length; i += 1) {
             const s = sats[i];
             const pv = satellite.propagate(s.satrec, date);
             if (!pv || !pv.position) continue;
-
-            const gmst = satellite.gstime(date);
             const gd = satellite.eciToGeodetic(pv.position, gmst);
-            const lat = gd.latitude;
-            const lon = gd.longitude;
-            const altKm = gd.height;
-
-            if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(altKm)) continue;
-
-            out.push({ id: s.id, name: s.name, lat, lon, altM: altKm * 1000.0 });
+            if (!Number.isFinite(gd.latitude) || !Number.isFinite(gd.longitude) || !Number.isFinite(gd.height)) continue;
+            positions.push({
+              id: s.id,
+              name: s.name,
+              latRad: gd.latitude,
+              lonRad: gd.longitude,
+              altKm: gd.height
+            });
           }
-
-          self.postMessage({ type: "POS", nowMs, positions: out });
+          self.postMessage({ type: "POS", positions });
         }
       };
     `;
 
     const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: "text/javascript" })));
-    const posById = new Map();
 
     worker.onmessage = (e) => {
       const msg = e.data;
       if (msg.type === "READY") {
-        const el = document.querySelector("[data-sat-count]");
-        if (el) el.textContent = String(msg.count);
-        statusEl.textContent = `Loaded ${msg.count} satellites`;
+        state.workerReady = true;
+        els.satCount.textContent = String(msg.count);
+        setStatus(`Tracking ${msg.count} satellites from ${state.source}.`, "ok");
         return;
       }
-      if (msg.type === "POS") {
-        for (const p of msg.positions) posById.set(p.id, p);
-        const visibleEl = document.querySelector("[data-visible-count]");
-        if (visibleEl) visibleEl.textContent = String(msg.positions.length);
+
+      if (msg.type !== "POS") return;
+
+      for (const p of msg.positions) {
+        const latDeg = Cesium.Math.toDegrees(p.latRad);
+        const lonDeg = Cesium.Math.toDegrees(p.lonRad);
+        const position = Cesium.Cartesian3.fromRadians(p.lonRad, p.latRad, p.altKm * 1000);
+        const sat = {
+          id: p.id,
+          name: p.name,
+          latDeg,
+          lonDeg,
+          altKm: p.altKm,
+          orbit: orbitClass(p.altKm),
+          position
+        };
+        state.satMap.set(p.id, sat);
+
+        let entity = state.satEntities.get(p.id);
+        if (!entity) {
+          entity = viewer.entities.add({
+            id: `sat-${p.id}`,
+            name: p.name,
+            position: position,
+            point: {
+              pixelSize: 5,
+              color: Cesium.Color.CYAN,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 1
+            }
+          });
+          state.satEntities.set(p.id, entity);
+        } else {
+          entity.position = position;
+        }
+
+        const trail = state.trailMap.get(p.id) || [];
+        trail.push(position);
+        if (trail.length > 90) trail.shift();
+        state.trailMap.set(p.id, trail);
+
+        if (state.showTrails) {
+          let trailEntity = state.trailEntities.get(p.id);
+          if (!trailEntity) {
+            trailEntity = viewer.entities.add({
+              id: `trail-${p.id}`,
+              polyline: {
+                positions: trail,
+                width: 1.4,
+                material: Cesium.Color.CYAN.withAlpha(0.35)
+              }
+            });
+            state.trailEntities.set(p.id, trailEntity);
+          } else {
+            trailEntity.polyline.positions = [...trail];
+          }
+        }
       }
+
+      if (state.selectedId) {
+        updateSelectionCard(state.satMap.get(state.selectedId));
+      }
+
+      applyVisibilityFilters();
     };
 
-    function makeSatEntity(id, displayName) {
-      return viewer.entities.add({
-        id: "sat-" + id,
-        name: displayName,
-        position: new Cesium.CallbackProperty(() => {
-          const p = posById.get(id);
-          if (!p) return undefined;
-          return Cesium.Cartesian3.fromRadians(p.lon, p.lat, p.altM);
-        }, false),
-        point: {
-          pixelSize: 4,
-          outlineWidth: 0,
-          color: Cesium.Color.CYAN
+    async function fetchSatSource() {
+      setStatus(`Loading ${state.source} TLE source…`);
+      state.satMap.clear();
+      for (const entity of state.satEntities.values()) viewer.entities.remove(entity);
+      for (const entity of state.trailEntities.values()) viewer.entities.remove(entity);
+      state.satEntities.clear();
+      state.trailEntities.clear();
+      state.trailMap.clear();
+      els.visibleCount.textContent = "0";
+
+      const url = `https://celestrak.org/NORAD/elements/gp.php?GROUP=${encodeURIComponent(state.source)}&FORMAT=tle`;
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`TLE fetch failed (${res.status})`);
+      const tleText = await res.text();
+      const sats = parseTLE(tleText).slice(0, state.maxRendered);
+      worker.postMessage({ type: "LOAD", payload: sats });
+    }
+
+    async function fetchAirTraffic() {
+      if (!state.includeAir) return;
+      try {
+        const endpoint = "https://opensky-network.org/api/states/all";
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(endpoint)}`;
+        const res = await fetch(proxy, { cache: "no-store" });
+        if (!res.ok) throw new Error("air feed unavailable");
+        const data = await res.json();
+        const states = (data.states || []).slice(0, 250);
+
+        for (const [id, entity] of state.airEntities.entries()) {
+          viewer.entities.remove(entity);
+          state.airEntities.delete(id);
         }
-      });
-    }
 
-    let entitiesCreated = false;
-    let renderList = [];
-
-    async function loadAndStart() {
-      statusEl.textContent = "Fetching TLE feed…";
-      const res = await fetch(CELESTRAK_TLE_URL, { cache: "no-store" });
-      if (!res.ok) throw new Error("TLE fetch failed: " + res.status + " " + res.statusText);
-      const text = await res.text();
-      const sats = parseTLE(text);
-
-      renderList = sats.slice(0, MAX_RENDERED).map((s, i) => ({
-        id: String(i),
-        name: s.name,
-        line1: s.line1,
-        line2: s.line2
-      }));
-
-      worker.postMessage({ type: "LOAD_TLES", payload: renderList });
-
-      if (!entitiesCreated) {
-        viewer.entities.removeAll();
-        for (const s of renderList) makeSatEntity(s.id, s.name);
-        entitiesCreated = true;
+        for (const row of states) {
+          const id = row[0];
+          const lon = row[5];
+          const lat = row[6];
+          const alt = row[7] || 0;
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+          const ent = viewer.entities.add({
+            id: `air-${id}`,
+            position: Cesium.Cartesian3.fromDegrees(lon, lat, alt),
+            point: { pixelSize: 3, color: Cesium.Color.YELLOW.withAlpha(0.8) },
+            label: {
+              text: "✈",
+              font: "10px sans-serif",
+              pixelOffset: new Cesium.Cartesian2(0, -10),
+              fillColor: Cesium.Color.YELLOW.withAlpha(0.8)
+            }
+          });
+          state.airEntities.set(id, ent);
+        }
+        els.airCount.textContent = String(state.airEntities.size);
+      } catch {
+        els.airCount.textContent = "0";
       }
-
-      setInterval(() => {
-        worker.postMessage({
-          type: "TICK",
-          nowMs: Date.now(),
-          minIntervalMs: 900
-        });
-      }, 250);
     }
 
-    loadAndStart().catch((err) => {
-      console.error(err);
-      statusEl.textContent = "Live tracking failed: " + (err?.message || String(err));
-      statusEl.className = "text-xs text-red-200 rounded border border-red-500 p-2 bg-red-900/40";
+    async function markMyLocation() {
+      if (!navigator.geolocation) {
+        setStatus("Geolocation unavailable in this browser.", "error");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const point = viewer.entities.add({
+          position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+          point: { pixelSize: 10, color: Cesium.Color.LIME },
+          label: { text: "My Location", pixelOffset: new Cesium.Cartesian2(0, -16), fillColor: Cesium.Color.LIME }
+        });
+        state.placePins.push(point);
+        viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(lon, lat, 1200000), duration: 1.5 });
+        setStatus("My location pinned.", "ok");
+      }, () => setStatus("Location access denied.", "error"));
+    }
+
+    async function toggleBuildings() {
+      state.showBuildings = !state.showBuildings;
+      if (state.showBuildings) {
+        try {
+          if (!state.osmTileset) state.osmTileset = await Cesium.createOsmBuildingsAsync();
+          viewer.scene.primitives.add(state.osmTileset);
+          els.bldBtn.textContent = "Buildings: ON";
+          setStatus("3D buildings enabled.", "ok");
+        } catch {
+          state.showBuildings = false;
+          els.bldBtn.textContent = "Buildings: OFF";
+          setStatus("3D buildings unavailable in this environment.", "error");
+        }
+      } else {
+        if (state.osmTileset) viewer.scene.primitives.remove(state.osmTileset);
+        els.bldBtn.textContent = "Buildings: OFF";
+      }
+    }
+
+    function clearPlaceMarkers() {
+      for (const pin of state.placePins) viewer.entities.remove(pin);
+      state.placePins = [];
+      setStatus("All place pins cleared.", "ok");
+    }
+
+    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    handler.setInputAction((movement) => {
+      const picked = viewer.scene.pick(movement.position);
+      if (!picked || !picked.id || !picked.id.id || !String(picked.id.id).startsWith("sat-")) {
+        state.selectedId = null;
+        updateSelectionCard(null);
+        return;
+      }
+      const id = String(picked.id.id).replace("sat-", "");
+      selectSatellite(id);
+    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+    handler.setInputAction((movement) => {
+      const picked = viewer.scene.pick(movement.endPosition);
+      if (!picked || !picked.id || !picked.id.id) {
+        els.tooltip.classList.add("hidden");
+        return;
+      }
+      const id = String(picked.id.id).replace("sat-", "");
+      const sat = state.satMap.get(id);
+      if (!sat) {
+        els.tooltip.classList.add("hidden");
+        return;
+      }
+      els.tooltip.classList.remove("hidden");
+      els.tooltip.style.left = `${movement.endPosition.x + 14}px`;
+      els.tooltip.style.top = `${movement.endPosition.y + 14}px`;
+      els.tooltip.textContent = `${sat.name} • ${sat.altKm.toFixed(1)} km`;
+    }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+
+    els.sourceSelect.addEventListener("change", async (e) => {
+      state.source = e.target.value;
+      try { await fetchSatSource(); } catch (err) { setStatus(err.message, "error"); }
     });
+    els.orbitFilter.addEventListener("change", (e) => {
+      state.orbitFilter = e.target.value;
+      applyVisibilityFilters();
+    });
+    els.searchInput.addEventListener("input", (e) => {
+      state.search = e.target.value.trim().toLowerCase();
+      applyVisibilityFilters();
+    });
+    els.reloadBtn.addEventListener("click", async () => {
+      try { await fetchSatSource(); } catch (err) { setStatus(err.message, "error"); }
+    });
+    els.myLocBtn.addEventListener("click", markMyLocation);
+    els.clearMarkersBtn.addEventListener("click", clearPlaceMarkers);
+
+    els.airBtn.addEventListener("click", () => {
+      state.includeAir = !state.includeAir;
+      els.airBtn.textContent = `Air: ${state.includeAir ? "ON" : "OFF"}`;
+      if (!state.includeAir) {
+        for (const entity of state.airEntities.values()) viewer.entities.remove(entity);
+        state.airEntities.clear();
+        els.airCount.textContent = "0";
+      }
+    });
+
+    els.trailBtn.addEventListener("click", () => {
+      state.showTrails = !state.showTrails;
+      els.trailBtn.textContent = `Trails: ${state.showTrails ? "ON" : "OFF"}`;
+      for (const entity of state.trailEntities.values()) entity.show = state.showTrails;
+    });
+
+    els.bldBtn.addEventListener("click", toggleBuildings);
+
+    async function start() {
+      setStatus("Booting monitoring stack…");
+      try {
+        await fetchSatSource();
+        setInterval(() => {
+          worker.postMessage({ type: "TICK", nowMs: Date.now(), minIntervalMs: 900 });
+        }, 250);
+        setInterval(fetchAirTraffic, 15000);
+        fetchAirTraffic();
+      } catch (err) {
+        setStatus(err.message || "Startup failed", "error");
+      }
+    }
+
+    start();
   </script>
 </body>
 </html>

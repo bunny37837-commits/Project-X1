@@ -7,57 +7,33 @@
 
 ## V1 — Core working feature
 ### Goal
-Ship a runnable single-file `index.html` that renders a real 3D Earth with Cesium and displays live ISS tracking.
+Ship a runnable single-file `index.html` that renders a real 3D Earth and displays live satellites.
 
 ### Acceptance Criteria
-- 3D Cesium globe loads with the provided Cesium Ion token.
-- ISS marker appears and updates on a 10-second loop.
-- Side panel shows ISS telemetry (lat/lon/alt/speed).
-
-### Tasks
-- Wire CesiumJS via CDN in `index.html`.
-- Add Open Notify ISS fetch and entity updates.
-- Add baseline UI panel and status/error handling.
+- Cesium globe loads from CDN.
+- Satellite positions update continuously from parsed TLE sources.
+- Side panel shows live status and object counts.
 
 ## V2 — Complete feature set
 ### Goal
-Implement multi-satellite tracking and all user-facing interactions from SPEC.
+Add monitoring controls and selection-focused interactions.
 
 ### Acceptance Criteria
-- Multiple categories (ISS, Starlink, GPS, Weather) can be filtered.
-- Satellite click reveals details (name, altitude, speed, lat/lon).
-- Search by name filters visible satellite list.
-- Orbit path visualization is visible for tracked satellites.
-
-### Tasks
-- Integrate N2YO endpoints for live positions.
-- Build category + search controls.
-- Add entity click handling and details drawer.
-- Render per-satellite orbit polylines.
+- Source switching between multiple satellite groups.
+- Search and orbit-class filters control list + visibility.
+- Click satellite to inspect details (name, lat/lon, altitude).
+- Orbit trails can be toggled.
 
 ## V3 — Production ready
 ### Goal
-Polish for a complete production experience with robust fallbacks and full spec compliance.
+Deliver professional-grade situational monitoring UX.
 
 ### Acceptance Criteria
-- Live update loop runs every 10 seconds with resilient API error handling.
-- Day/night globe lighting enabled.
-- User location marker shown when permission granted.
-- ISS next pass prediction displayed.
-- Satellite count and data refresh timestamps shown.
-
-### Tasks
-- Add hardened fetch utility with timeout and fallback behavior.
-- Add loading, empty, and degraded-data states in UI.
-- Final documentation updates (`DECISIONS.md`, `STATUS.md`).
-- Final verification sweep for runnable single-file output.
-
-## Risks & mitigations
-| Risk | Impact | Mitigation |
-|---|---|---|
-| N2YO browser CORS restrictions | High | Use direct fetch first, then CORS proxy fallback path with clear UI warning. |
-| Open Notify intermittently unavailable | Medium | Keep latest-known ISS point and show stale-data indicator. |
-| Geolocation denied by user | Low | Gracefully continue without user marker. |
+- Live satellite monitoring remains keyless and stable.
+- Optional live air traffic overlay works with graceful fallback.
+- My-location pinning and clear-place controls are available.
+- Optional buildings layer and place-name resolution are integrated.
+- Status panel communicates degraded/error states clearly.
 
 ## Done Means
-User opens `index.html` in a browser, sees a 3D Earth with live-moving satellites, can filter/search, click satellites for details, and view ISS next-pass prediction.
+User opens `index.html` and gets a professional monitoring surface with live-moving satellites, filter/search controls, clickable details, and optional air/location/building context.
