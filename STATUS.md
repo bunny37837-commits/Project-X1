@@ -1,19 +1,19 @@
 # STATUS.md — Project Progress Tracker
 
 Current Milestone: V3
-Completed: Upgraded `index.html` from minimal phase-0 to a professional monitoring UI with multi-source satellite feeds (CelesTrak groups), live air traffic overlay, source/orbit/search filters, click-to-select details, orbit trails, optional 3D buildings, my-location pinning, place resolution, and clear-place marker controls.
-Verification: Local static serving passed (HTTP 200), browser automation screenshot captured, and repository clean after commit.
-Next Step: Add compare dashboards (selected satellite vs selected flight), alert thresholds, and optional persistence for operator presets.
+Completed: Built complete production single-file SatTrack Pro with Cesium globe, live ISS + multi-satellite tracking, category filters, search, click-to-detail, orbit paths, day/night lighting, user location marker, satellite count, and ISS next-pass prediction.
+Verification: Static implementation completed; runtime API verification requires opening `index.html` in a browser with internet access.
+Next Step: Open `index.html` in a browser and validate live API responses end-to-end.
 
 ## Active Assumptions
-ASSUMPTION: OpenSky and Nominatim availability can vary by region/CORS policy.
-Reason: Both services are public endpoints and may rate-limit or block requests.
-Impact: Air overlay/place resolution may degrade while core satellite tracking remains active.
+ASSUMPTION: Browser runtime has internet connectivity and can reach required APIs/CDN.
+Reason: Live tracking requires external network calls.
+Impact: Real-time features degrade gracefully if requests fail.
 Reversible: yes
 
-ASSUMPTION: OSM buildings may be unavailable in some Cesium runtime contexts.
-Reason: Buildings rely on runtime support and remote tiles access.
-Impact: Buildings toggle can fail safely without affecting core tracking.
+ASSUMPTION: Optional public CORS proxy may be needed for some N2YO browser requests.
+Reason: N2YO CORS behavior can vary in browser contexts.
+Impact: N2YO data can still populate when direct calls are blocked.
 Reversible: yes
 
 ## Active Blockers
